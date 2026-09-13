@@ -89,6 +89,44 @@ jobs:
         cd ${{ inputs.DEVICE_PATH }}
         echo "COMMIT_ID=$(git rev-parse HEAD)" >> $GITHUB_ENV
 
+    - name: Clone Device Dependencies
+      run: |
+        cd ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
+
+        DEPS="${{ inputs.DEVICE_PATH }}/twrp.dependencies"
+
+        if [ ! -f "$DEPS" ]; then
+          echo "No twrp.dependencies found at $DEPS"
+          exit 1
+        fi
+
+        jq -c '.[]' "$DEPS" | while read -r dep; do
+          REPO=$(echo "$dep" | jq -r '.repository')
+          PATH_DST=$(echo "$dep" | jq -r '.target_path')
+          REVISION=$(echo "$dep" | jq -r '.revision')
+
+          echo "========================================"
+          echo "Repository: $REPO"
+          echo "Revision:   $REVISION"
+          echo "Path:       $PATH_DST"
+          echo "========================================"
+
+          if [ -d "$PATH_DST/.git" ]; then
+            echo "$PATH_DST already exists, skipping."
+            continue
+          fi
+
+          rm -rf "$PATH_DST"
+          mkdir -p "$(dirname "$PATH_DST")"
+
+          git clone \
+            --depth=1 \
+            --single-branch \
+            -b "$REVISION" \
+            "https://github.com/${REPO}.git" \
+            "$PATH_DST"
+        done
+
     - name: Building OrangeFox
       run: |
         cd ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ inputs.MANIFEST_BRANCH }}
